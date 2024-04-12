@@ -45,6 +45,9 @@ using namespace cv;
 // buffer for sprintf
 char buf[100];
 
+// for double green bounds checking
+int RECHECK = 0;
+
 
 // used to sort contours (might not need this during real run)
 // contour compare function
@@ -97,7 +100,7 @@ int green_square(Mat &img){
 	findContours(img, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 	
 	// sort by contour area
-	printf("\nSorted %zu contours\n", contours.size());
+	//printf("\nSorted %zu contours\n", contours.size());
 	sort(contours.begin(), contours.end(), contour_compare);
 	int left_green_count = 0, right_green_count = 0;
 	
@@ -109,6 +112,7 @@ int green_square(Mat &img){
 	for (auto& cnt : contours) {
 		// area is typically around 2900 for full green square
 		if(contourArea(cnt) > 1500){
+			printf("Checking green contour\n");
 			// green square identified, now determine if it is left or right green square (or both i guess)
 			Rect br = boundingRect(cnt);
 			Point center(br.x + (br.width / 2), br.y + (br.height / 2));
@@ -119,17 +123,24 @@ int green_square(Mat &img){
 			circle(debug, center, 4, Scalar(0, 0, 255), FILLED);
 			
 			// now need to use the center to determine if it is false, left, or right
-			printf("center: (%3d,%3d)\n", center.x, center.y);			
+			//printf("center: (%3d,%3d)\n", center.x, center.y);			
 			// when the center.x < 160 its on left
 			// when the center.x > 160 its on right
 			// when center.y gets close to 240 (max height) it is closer to robot
 			
 			
 			// before moving on check if the green square is ON THE EDGE OF THE IMAGE, ignore if it is too far out
-			if(center.x < 50 || center.x > 270) //ARBITRARY BOUNDARIES
-				continue;
-			if(center.y < 120 || center.y + (int)(br.height*(2.0/3)) >= 240)
-				continue;
+			
+			// ONLY CHECK THIS IS NO GREEN HAS BEEN DETECED SO FAR.... the second green is always out of bounds
+			if(RECHECK == 0){
+				if(center.x < 50 || center.x > 270) { //ARBITRARY BOUNDARIES
+					printf("x out of bounds");
+					continue;
+				}
+				if(center.y < 120 || center.y + (int)(br.height*(2.0/3)) >= 240) {
+					continue;
+				}
+			}
 			
 			
 			// checking individual points around the green square
@@ -152,29 +163,32 @@ int green_square(Mat &img){
 			
 			// check each side for the line
 			int left_check_color = line.at<unsigned char>(check_left);
-			printf("left check: %d\n", left_check_color);
+			//printf("left check: %d\n", left_check_color);
 			int right_check_color = line.at<unsigned char>(check_right);
-			printf("right check: %d\n", right_check_color);
+			//printf("right check: %d\n", right_check_color);
 			int above_check_color = line.at<unsigned char>(check_above);
-			printf("above check: %d\n", above_check_color);
+			//printf("above check: %d\n", above_check_color);
 			int below_check_color = line.at<unsigned char>(check_below);
-			printf("below check: %d\n", below_check_color);
+			//printf("below check: %d\n", below_check_color);
 			
 			// basic if/else version
 			if(above_check_color == 0){
 				printf("FALSE FALSE FALSE FALSE\n");
 			}
-			else if(above_check_color == 255 && left_check_color == 255){
-				printf("LEFT GREEN DETECTED\n");
-				left_green_count++;
-			}
-			else if(above_check_color == 255 && right_check_color == 255){
-				printf("RIGHT GREEN DETECTED\n");
-				right_green_count++;
+			else {
+				//if(above_check_color == 255 && right_check_color == 255){
+				if(below_check_color == 0 && right_check_color == 255){
+					printf("LEFT GREEN DETECTED\n");
+					left_green_count++;
+				}
+				if(below_check_color == 0 && left_check_color == 255){
+					printf("RIGHT GREEN DETECTED\n");
+					right_green_count++;
+				}
 			}
 			
 			
-			printf("GREEN SQUARE FOUND: area: %f\n", contourArea(cnt));
+			//printf("GREEN SQUARE FOUND: area: %f\n", contourArea(cnt));
 		}
 	}
 	
@@ -192,7 +206,7 @@ int green_square(Mat &img){
 	
 	
 	imshow("green center", debug);
-	printf("\n\nDONE\n\n");
+	//printf("\n\nDONE\n\n");
 	return 0;
 }
 
@@ -289,30 +303,36 @@ void line_trace(){
 		int green_result = green_square(g_img);
 		if(green_result){
 			// green detected, do stuff...
+			RECHECK = 1;
 			
 			// forward a little bit then stop
 			char tx_buffer[40];
 			sprintf(tx_buffer, "[%d, %d]", 20, 20);
 			write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
-			this_thread::sleep_for(600ms);
+			this_thread::sleep_for(600ms);									// arbitrary forward amount (might be too long...)
 			sprintf(tx_buffer, "[%d, %d]", 0, 0);
 			write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
-			this_thread::sleep_for(2000ms);
+			this_thread::sleep_for(1000ms);
 			
 			// recheck green for all possible values
+			printf("\n\nRECHECK THE GREEN.........\n");
 			green_result = green_square(g_img_recheck); //1Left 2Right 3Uturn
+			
+			// done doing checks
+			RECHECK = 0;
+			
 			if(green_result == 1){
 				// left turn
 				sprintf(tx_buffer, "[%d, %d]", 20, 20);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 				this_thread::sleep_for(600ms);	
-				sprintf(tx_buffer, "[%d, %d]", 50, -50);								// ???????????????????????????
+				sprintf(tx_buffer, "[%d, %d]", -50, 50);								// ???????????????????????????
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
-				this_thread::sleep_for(300ms);
+				this_thread::sleep_for(350ms);
 				// stop
 				sprintf(tx_buffer, "[%d, %d]", 0, 0);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
-				this_thread::sleep_for(2000ms);
+				this_thread::sleep_for(1000ms);
 				// send flush command to the arduino
 				//sprintf(tx_buffer, "[%d, %d]", 1000, 0);
 				//write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
@@ -322,13 +342,13 @@ void line_trace(){
 				sprintf(tx_buffer, "[%d, %d]", 20, 20);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 				this_thread::sleep_for(600ms);
-				sprintf(tx_buffer, "[%d, %d]", -50, 50);									// ?????????????????????
+				sprintf(tx_buffer, "[%d, %d]", 50, -50);									// ?????????????????????
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
-				this_thread::sleep_for(300ms);
+				this_thread::sleep_for(350ms);
 				// stop
 				sprintf(tx_buffer, "[%d, %d]", 0, 0);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
-				this_thread::sleep_for(2000ms);
+				this_thread::sleep_for(1000ms);
 				// send flush command to the arduino
 				//sprintf(tx_buffer, "[%d, %d]", 1000, 0);
 				//write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
@@ -344,7 +364,7 @@ void line_trace(){
 				// stop
 				sprintf(tx_buffer, "[%d, %d]", 0, 0);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
-				this_thread::sleep_for(2000ms);
+				this_thread::sleep_for(1000ms);
 				// send flush command to the arduino
 				//sprintf(tx_buffer, "[%d, %d]", 1000, 0);
 				//write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
@@ -363,7 +383,7 @@ void line_trace(){
 		//threshold(blur, thresh, 127, 255, THRESH_BINARY_INV);
 		
 		// show binary processed image
-		imshow("proc", proc);
+		//imshow("proc", proc);
 		
 		
 		// find contours
@@ -393,7 +413,7 @@ void line_trace(){
 		int cx = m.m10 / m.m00; // col
 		int cy = m.m01 / m.m00; // row
 		
-		printf("\nMoments: %d, %d\n\n", cx, cy);
+		//printf("\nMoments: %d, %d\n\n", cx, cy);
 		
 		// draw the new center over img
 		circle(img, Point(160, 120), 10, Scalar(0, 255, 0), FILLED); 	// center of the image itself
@@ -446,7 +466,7 @@ void line_trace(){
 			//printf("UART TX ok\n");
 			//printf("count: %d\n", count);
 		}
-		printf("Sent the following string: %s\n", tx_buffer);
+		//printf("Sent the following string: %s\n", tx_buffer);
 		
 		
 		// get keyboard input
