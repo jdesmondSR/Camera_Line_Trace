@@ -34,6 +34,10 @@
 #define BAUDRATE B115200                                                      
 #define MODEMDEVICE "/dev/ttyAMA0"
 
+//#define DEBUG_IMSHOW(name, frame) imshow(name, frame);
+
+#define DEBUG_IMSHOW(name,frame)
+
 
 
 using namespace std::chrono_literals;
@@ -112,7 +116,7 @@ int green_square(Mat &img){
 	for (auto& cnt : contours) {
 		// area is typically around 2900 for full green square
 		if(contourArea(cnt) > 1500){
-			printf("Checking green contour\n");
+			//printf("Checking green contour\n");
 			// green square identified, now determine if it is left or right green square (or both i guess)
 			Rect br = boundingRect(cnt);
 			Point center(br.x + (br.width / 2), br.y + (br.height / 2));
@@ -205,7 +209,7 @@ int green_square(Mat &img){
 	}
 	
 	
-	imshow("green center", debug);
+	DEBUG_IMSHOW("green center", debug);
 	//printf("\n\nDONE\n\n");
 	return 0;
 }
@@ -272,7 +276,7 @@ void line_trace(){
 	// loop
 	char input = 0;
 	int leftmotor, rightmotor;
-	bool stop_motors = 1;
+	bool stop_motors = 0;
 	int counter = 0;
 	
 	
@@ -310,12 +314,14 @@ void line_trace(){
 			sprintf(tx_buffer, "[%d, %d]", 20, 20);
 			write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 			this_thread::sleep_for(600ms);									// arbitrary forward amount (might be too long...)
+			/*
 			sprintf(tx_buffer, "[%d, %d]", 0, 0);
 			write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 			this_thread::sleep_for(1000ms);
+			*/
 			
 			// recheck green for all possible values
-			printf("\n\nRECHECK THE GREEN.........\n");
+			//printf("\n\nRECHECK THE GREEN.........\n");
 			green_result = green_square(g_img_recheck); //1Left 2Right 3Uturn
 			
 			// done doing checks
@@ -330,45 +336,41 @@ void line_trace(){
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 				this_thread::sleep_for(350ms);
 				// stop
+				/*
 				sprintf(tx_buffer, "[%d, %d]", 0, 0);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 				this_thread::sleep_for(1000ms);
-				// send flush command to the arduino
-				//sprintf(tx_buffer, "[%d, %d]", 1000, 0);
-				//write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
+				*/
 				
 			}else if(green_result == 2){
 				// right turn
 				sprintf(tx_buffer, "[%d, %d]", 20, 20);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 				this_thread::sleep_for(600ms);
-				sprintf(tx_buffer, "[%d, %d]", 50, -50);									// ?????????????????????
+				sprintf(tx_buffer, "[%d, %d]", 50, -50);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 				this_thread::sleep_for(350ms);
 				// stop
+				/*
 				sprintf(tx_buffer, "[%d, %d]", 0, 0);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 				this_thread::sleep_for(1000ms);
-				// send flush command to the arduino
-				//sprintf(tx_buffer, "[%d, %d]", 1000, 0);
-				//write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
+				*/
 				
 			}else if(green_result == 3){
 				// turn around
 				sprintf(tx_buffer, "[%d, %d]", 20, 20);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 				this_thread::sleep_for(600ms);
-				sprintf(tx_buffer, "[%d, %d]", -50, 50);									// ?????????????????????
+				sprintf(tx_buffer, "[%d, %d]", -50, 50);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 				this_thread::sleep_for(900ms);
 				// stop
+				/*
 				sprintf(tx_buffer, "[%d, %d]", 0, 0);
 				write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
 				this_thread::sleep_for(1000ms);
-				// send flush command to the arduino
-				//sprintf(tx_buffer, "[%d, %d]", 1000, 0);
-				//write(uart0_filestream, &tx_buffer[0], strlen(tx_buffer));
-				
+				*/		
 			}
 			
 		}
@@ -418,7 +420,7 @@ void line_trace(){
 		// draw the new center over img
 		circle(img, Point(160, 120), 10, Scalar(0, 255, 0), FILLED); 	// center of the image itself
 		circle(img, Point(cx, cy), 5, Scalar(255,0,0), FILLED);			// center of the contour
-		imshow("Main Image", img);
+		DEBUG_IMSHOW("Main Image", img);
 		
 		
 		
