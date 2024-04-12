@@ -1,3 +1,18 @@
+// for the oled
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// oled object and print function
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
+void print(int line_number, char s[]) {
+  display.setCursor(0, line_number * 8);
+  display.print(s);
+}
+// void print(int line_number, String s) {
+//   display.setCursor(0, line_number * 8);
+//   display.print(s);
+// }
 
 
 // map function that constrains bad input
@@ -11,7 +26,9 @@ struct Motor {
   uint8_t fpin;                             //fwd pin
   uint8_t rpin;                             //reverse pin
   void speed(int val);                      //function setting speed
-} leftmotor{ 10, 11 }, rightmotor{ 8, 9 };  // init right away
+} leftmotor{ 8, 9 }, rightmotor{ 10, 11 };
+
+//} leftmotor{ 10, 11 }, rightmotor{ 8, 9 };  // init right away
 
 // speed function for setting motor speed
 void Motor::speed(int val) {
@@ -27,18 +44,78 @@ void Motor::speed(int val) {
 }
 
 
+void serial_flush() {
+  while (Serial1.available() > 0) {
+    Serial1.read();
+  }
+}
+
+
+
+
+
 void setup() {
+  Serial.begin(9600);
+  Wire.setSDA(0);
+  Wire.setSCL(1);
+  Wire.begin();
+  //delay(2000);
+
   // Serial1 is UART0:
   Serial1.setRX(17);         // UART0 RX GP1
   Serial1.setTX(16);         // UART0 TX GP1
   Serial1.setFIFOSize(128);  // optional... for larger messages
-  Serial1.begin(9600);
+  Serial1.begin(115200);
 
   for (int i = 8; i <= 11; i++)
     pinMode(i, OUTPUT);
 
   //Serial.begin(9600);  // This is the Serial USB (send to serial monitor)
   delay(2000);
+
+  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3D)) {
+    Serial.println("SSD1306 allocation failed");
+    for (;;)
+      ;  // Don't proceed, loop forever
+  }
+  Serial.println("OLED fine");
+  // start by clearing the buffer
+  display.clearDisplay();
+  display.setTextSize(1);  // Draw 2X-scale text
+  display.setTextColor(SSD1306_WHITE);
+
+
+  char buf[40];
+  sprintf(buf, "press gp20 to begin");
+  display.clearDisplay();
+  print(0, buf);
+  display.display();
+
+  pinMode(20, INPUT);
+  pinMode(21, INPUT);
+  while (digitalRead(20)) delay(20);
+
+  // leftmotor.speed(10);
+  // rightmotor.speed(0);
+  // delay(2000);
+  // leftmotor.speed(0);
+  // rightmotor.speed(10);
+  // delay(2000);
+  // leftmotor.speed(-10);
+  // rightmotor.speed(0);
+  // delay(2000);
+  // leftmotor.speed(0);
+  // rightmotor.speed(-10);
+  // delay(2000);
+
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.print("STARTING");
+  display.display();
+
+
   //while(!Serial);                      // wait until Serial Monitor connects
 
   //Serial.println("Enter some text:");  // Prompt user for some text
@@ -47,8 +124,11 @@ void setup() {
   //while (Serial.available()){          // Get the text byte by byte and send to Raspberry PI
   //  Serial1.print((char) Serial.read());
   //}
+
   Serial1.print('s');
 }
+
+int motor_status = 1;
 
 void loop() {
   /*
@@ -106,17 +186,52 @@ void loop() {
     }
     */
 
+
+
+    // PARSE UNTIL REACH '['
+    //char ch;
+    //while((ch = Serial1.read()) != '[') delay(2);
+    Serial.print("Serial available: ");
+    Serial.println(Serial1.available());
     int values[2];
-    for(int i = 0; i < 2; i++){
+    for (int i = 0; i < 2; i++) {
       values[i] = Serial1.parseInt();
     }
-    //Serial.printf("Left: %3d\tRight: %3d\n", values[0], values[1]);
+    Serial.printf("Left: %3d\tRight: %3d\n", values[0], values[1]);
 
-
-    leftmotor.speed(values[0]);
-    rightmotor.speed(values[1]);
-
+    // LAZY METHOD
+    while(Serial1.available()){
+      //Serial.println("DATA STILL AVAILABLE AFTER THE PARSE INTS...");
+      Serial1.read();
+    }
     
+
+    //if (values[0] >= 1000) {
+    //  serial_flush();
+    //} else {
+    display.clearDisplay();
+    sprintf(buf, "L: %4d", values[0]);
+    print(0, buf);
+    sprintf(buf, "R: %4d", values[1]);
+    print(2, buf);
+    display.display();
+
+    if (digitalRead(21) == 0) {
+      // button pressed
+      motor_status = !motor_status;
+      while (digitalRead(21) == 0) delay(20);  // delay while pressed down;
+    }
+
+    if (motor_status == 1) {
+      leftmotor.speed(values[0]);
+      rightmotor.speed(values[1]);
+    } else {
+      leftmotor.speed(0);
+      rightmotor.speed(0);
+    }
+    //}
+
+
     //Serial.println("\n");
   }
 }
