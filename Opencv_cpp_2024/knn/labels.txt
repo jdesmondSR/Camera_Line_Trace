@@ -1,0 +1,7 @@
+%YAML:1.0
+---
+LABELS: !!opencv-matrix
+   rows: 9
+   cols: 1
+   dt: f
+   data: [ 115., 115., 115., 104., 104., 104., 117., 117., 117. ]
